@@ -34,6 +34,7 @@ except ImportError:
     pyexiv2 = None
 try:
     import youtube_dl
+    from youtube_dl.utils import sanitize_filename
 except ImportError:
     youtube_dl = None
 
@@ -224,6 +225,8 @@ def add_exif(image_name, tags):
 def save_style():
     with open_text(backup_css) as css:
         css.write('''\
+@import url("override.css");
+
 body { width: 720px; margin: 0 auto; }
 body > footer { padding: 1em 0; }
 header > img { float: right; }
@@ -293,7 +296,9 @@ class TumblrBackup:
             ))
             for year in sorted(self.index.keys(), reverse=options.reverse_index):
                 self.save_year(idx, year)
-            idx.write(u'<footer><p>Generated on %s.</p></footer>\n' % strftime('%x %X'))
+            idx.write(u'<footer><p>Generated on %s by <a href=https://github.com/'
+                'bbolli/tumblr-utils>tumblr-utils</a>.</p></footer>\n' % strftime('%x %X')
+            )
 
     def save_year(self, idx, year):
         idx.write('<h3>%s</h3>\n<ul>\n' % year)
@@ -666,14 +671,15 @@ class TumblrPost:
 
     def get_youtube_url(self, youtube_url):
         # determine the media file name
+        filetmpl = u'%(id)s_%(uploader_id)s_%(title)s.%(ext)s'
         ydl = youtube_dl.YoutubeDL({
-            'outtmpl': join(self.media_folder, u'%(id)s_%(uploader_id)s_%(title)s.%(ext)s'),
+            'outtmpl': join(self.media_folder, filetmpl),
             'quiet': True, 'restrictfilenames': True, 'noplaylist': True
         })
         ydl.add_default_info_extractors()
         try:
             result = ydl.extract_info(youtube_url, download=False)
-            media_filename = ydl.prepare_filename(result)
+            media_filename = sanitize_filename(filetmpl % result['entries'][0], restricted=True)
         except:
             return ''
 
@@ -1008,6 +1014,8 @@ if __name__ == '__main__':
         parser.error("-O can only be used for a single blog-name")
     if options.exif and not pyexiv2:
         parser.error("--exif: module 'pyexif2' is not installed")
+    if (options.save_video or options.save_audio) and not youtube_dl:
+        parser.error("--save-video/-audio: module 'youtube_dl' is not installed")
 
     tb = TumblrBackup()
     try:
